@@ -1,0 +1,140 @@
+# 5-host lab: 2× (keepalived+haproxy) + 3× (rsyslog HF)
+#
+# Not: VRRP/LVS için privileged + NET_ADMIN gerekir.
+# Host kernel'inde IPVS modülleri yüklü olmalı: ip_vs, ip_vs_rr
+
+networks:
+  syslog_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
+
+volumes:
+  hf1_logs:
+  hf2_logs:
+  hf3_logs:
+  pin_state:
+
+services:
+  lb1:
+    build:
+      context: ./lb
+      dockerfile: Dockerfile
+    container_name: syslog-lb1
+    hostname: lb1
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+    environment:
+      LB_ROLE: lb1
+    volumes:
+      - ./lb/keepalived/keepalived-lb1.conf:/etc/keepalived/keepalived-lb1.conf:ro
+      - ./lb/keepalived/fwmark-pins.conf:/etc/keepalived/conf.d/fwmark-pins.conf
+      - ./lb/haproxy/haproxy.cfg:/etc/haproxy/haproxy.cfg:ro
+      - ./automation:/opt/automation:ro
+      - pin_state:/var/lib/syslog-pin
+      - hf1_logs:/data/hf1/remote:ro
+      - hf2_logs:/data/hf2/remote:ro
+      - hf3_logs:/data/hf3/remote:ro
+    networks:
+      syslog_net:
+        ipv4_address: 10.20.0.1
+    ports:
+      - "8514:514/tcp"
+      - "8404:8404/tcp"
+    depends_on: [hf1, hf2, hf3]
+
+  lb2:
+    build:
+      context: ./lb
+      dockerfile: Dockerfile
+    container_name: syslog-lb2
+    hostname: lb2
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+    environment:
+      LB_ROLE: lb2
+    volumes:
+      - ./lb/keepalived/keepalived-lb2.conf:/etc/keepalived/keepalived-lb2.conf:ro
+      - ./lb/keepalived/fwmark-pins.conf:/etc/keepalived/conf.d/fwmark-pins.conf
+      - ./lb/haproxy/haproxy.cfg:/etc/haproxy/haproxy.cfg:ro
+      - ./automation:/opt/automation:ro
+      - pin_state:/var/lib/syslog-pin
+      - hf1_logs:/data/hf1/remote:ro
+      - hf2_logs:/data/hf2/remote:ro
+      - hf3_logs:/data/hf3/remote:ro
+    networks:
+      syslog_net:
+        ipv4_address: 10.20.0.2
+    depends_on: [hf1, hf2, hf3]
+
+  hf1:
+    build:
+      context: ./hf
+      dockerfile: Dockerfile
+    container_name: syslog-hf1
+    hostname: hf1
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      ENABLE_LVS_DR: "1"
+    volumes:
+      - hf1_logs:/var/log/remote
+      - ./hf/rsyslog/rsyslog.conf:/etc/rsyslog.conf:ro
+    networks:
+      syslog_net:
+        ipv4_address: 10.20.0.11
+
+  hf2:
+    build:
+      context: ./hf
+      dockerfile: Dockerfile
+    container_name: syslog-hf2
+    hostname: hf2
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      ENABLE_LVS_DR: "1"
+    volumes:
+      - hf2_logs:/var/log/remote
+      - ./hf/rsyslog/rsyslog.conf:/etc/rsyslog.conf:ro
+    networks:
+      syslog_net:
+        ipv4_address: 10.20.0.12
+
+  hf3:
+    build:
+      context: ./hf
+      dockerfile: Dockerfile
+    container_name: syslog-hf3
+    hostname: hf3
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      ENABLE_LVS_DR: "1"
+    volumes:
+      - hf3_logs:/var/log/remote
+      - ./hf/rsyslog/rsyslog.conf:/etc/rsyslog.conf:ro
+    networks:
+      syslog_net:
+        ipv4_address: 10.20.0.13
+
+  # Otomasyon: hacim ölç → fwmark pin → keepalived reload (cron benzeri loop)
+  pin-agent:
+    image: python:3.11-slim
+    container_name: syslog-pin-agent
+    volumes:
+      - ./automation:/opt/automation:ro
+      - ./automation/config.lab.yaml:/etc/syslog-pin/config.yaml:ro
+      - pin_state:/var/lib/syslog-pin
+      - hf1_logs:/data/hf1/remote:ro
+      - hf2_logs:/data/hf2/remote:ro
+      - hf3_logs:/data/hf3/remote:ro
+      - ./lb/keepalived/fwmark-pins.conf:/etc/keepalived/conf.d/fwmark-pins.conf
+      - ./scripts/pin-agent-loop.sh:/pin-agent-loop.sh:ro
+    working_dir: /opt/automation
+    command: ["bash", "/pin-agent-loop.sh"]
+    networks:
+      syslog_net:
+        ipv4_address: 10.20.0.50
+    depends_on: [hf1, hf2, hf3, lb1]

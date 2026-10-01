@@ -1,0 +1,7 @@
+# /etc/cron.d/syslog-volume-pin
+# Her 5 dakikada hacim ölçümü + fwmark pin güncellemesi (lb MASTER üzerinde)
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+*/5 * * * * root /usr/bin/python3 /opt/syslog-pin/volume_pin.py --config /etc/syslog-pin/config.yaml >> /var/log/syslog-pin.log 2>&1

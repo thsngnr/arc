@@ -1,0 +1,38 @@
+# Lab overlay — volume_pin local mount'larla çalışır (SSH yok)
+
+log_root: /var/log/remote
+window_seconds: 300
+top_n: 6
+min_lines_to_pin: 10
+
+hf_hosts:
+  - name: hf1
+    ip: 10.20.0.11
+    fwmark: 1
+    log_root: /var/log/remote
+  - name: hf2
+    ip: 10.20.0.12
+    fwmark: 2
+    log_root: /var/log/remote
+  - name: hf3
+    ip: 10.20.0.13
+    fwmark: 3
+    log_root: /var/log/remote
+
+ssh_user: root
+use_local_mounts: true
+local_mount_map:
+  hf1: /data/hf1/remote
+  hf2: /data/hf2/remote
+  hf3: /data/hf3/remote
+
+output:
+  iptables_script: /var/lib/syslog-pin/apply-fwmark.sh
+  keepalived_include: /etc/keepalived/conf.d/fwmark-pins.conf
+  state_file: /var/lib/syslog-pin/state.json
+  pin_map_file: /var/lib/syslog-pin/pin-map.json
+
+# Lab'da pin-agent iptables uygulamaz; conf üretir, lb tarafı mount eder
+keepalived_reload: "echo '[lab] keepalived include updated — lb reload ayrı]'"
+static_pins: []
+dry_run: true

@@ -1,0 +1,12 @@
+[Unit]
+Description=Syslog volume-aware fwmark pin refresh
+After=network-online.target keepalived.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/syslog-pin/volume_pin.py --config /etc/syslog-pin/config.yaml
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
