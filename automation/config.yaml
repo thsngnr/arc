@@ -1,0 +1,63 @@
+# volume_pin otomasyon ayarları
+
+# HF log kökleri (her HF'te aynı yol)
+log_root: /var/log/remote
+
+# Ölçüm penceresi (saniye) — son N saniyedeki satır/mesaj artışı
+window_seconds: 3600
+
+# En çok log üreten kaç kaynak pinlensin
+top_n: 6
+
+# Pin başına fwmark başlangıcı (HF fwmark'ları inventory ile uyumlu: 1,2,3)
+# Kaynaklar HF'lere round-robin dağıtılır; mark = hf.fwmark
+hf_hosts:
+  - name: hf1
+    ip: 10.20.0.11
+    fwmark: 1
+    log_root: /var/log/remote
+  - name: hf2
+    ip: 10.20.0.12
+    fwmark: 2
+    log_root: /var/log/remote
+  - name: hf3
+    ip: 10.20.0.13
+    fwmark: 3
+    log_root: /var/log/remote
+
+# SSH ile uzak HF'lerden sayım (lab'da local path override kullanılabilir)
+ssh_user: root
+ssh_key: /root/.ssh/id_rsa
+use_local_mounts: true
+local_mount_map:
+  hf1: /data/hf1/remote
+  hf2: /data/hf2/remote
+  hf3: /data/hf3/remote
+
+# Üretilen artefaktlar (LB hostlarında)
+output:
+  iptables_script: /etc/syslog-pin/apply-fwmark.sh
+  keepalived_include: /etc/keepalived/conf.d/fwmark-pins.conf
+  state_file: /var/lib/syslog-pin/state.json
+  pin_map_file: /var/lib/syslog-pin/pin-map.json
+
+# keepalived reload komutu
+keepalived_reload: "kill -HUP $(cat /run/keepalived.pid 2>/dev/null) 2>/dev/null || systemctl reload keepalived"
+
+# Minimum eşik: pencere içinde bundan az satır üreten kaynak pinlenmez
+min_lines_to_pin: 100
+
+# Sabit pinler (opsiyonel) — bilinen PAN'lar için; otomasyonu bypass eder
+# Boş bırakılırsa tamamen otomatik keşif kullanılır
+static_pins: []
+# Örnek:
+# static_pins:
+#   - source_ip: 192.168.10.1
+#     hf: hf1
+#   - source_ip: 192.168.10.2
+#     hf: hf2
+#   - source_ip: 192.168.10.3
+#     hf: hf3
+
+# Dry-run: true iken dosya yazar ama iptables/reload uygulamaz
+dry_run: false
